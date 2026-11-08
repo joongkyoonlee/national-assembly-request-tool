@@ -13,14 +13,15 @@
       <a class="brand" href="./index.html"><span class="brand-mark">A</span><span>국회 요구자료 대응</span></a>
       <nav class="main-nav" aria-label="주요 화면">
         <a class="active" href="./index.html">시작 화면</a><a href="./assign.html">배분</a>
-        <a class="future" href="./dept.html" aria-disabled="true">현업 회신 · S6</a>
-        <a class="future" href="./collect.html" aria-disabled="true">취합 · S8</a>
+        <a href="./dept.html">현업 회신</a>
+        <a href="./collect.html">취합</a>
       </nav>
     </div>
   </header>
   <main class="shell">
     <div class="page-title">
-      <div><span class="badge">교육용 가상 자료</span><h1>요구자료 처리 현황</h1><p>접수한 문항과 배분 상태를 이 브라우저에 저장합니다. 배분 판단과 확정은 담당자가 수행합니다.</p></div>
+      <div><span class="badge">교육용 가상 자료</span><h1>요구자료 처리 현황</h1><p>접수·배분·회신 상태를 함께 확인합니다. 배분 판단과 확정은 담당자가 수행합니다.</p></div>
+      <div class="storage-mode" data-storage-mode>저장 위치 확인 중</div>
     </div>
     <section class="dashboard-grid" aria-label="처리 현황">
       <article class="metric"><strong id="total-count">0</strong><span>전체 문항</span></article>
@@ -28,29 +29,128 @@
       <article class="metric"><strong id="confirmed-count">0</strong><span>배분확정</span></article>
       <article class="metric"><strong id="files-count">0</strong><span>요구서 파일</span></article>
     </section>
+    <section class="section" id="processing-log">
+      <div class="section-head">
+        <div><h2>처리 기록 <span class="log-count" id="log-count">0건 / 전체 0건</span></h2><p>작업·과·문항으로 기록을 걸러 현재 상태와 함께 확인합니다.</p></div>
+        <button class="btn primary" id="log-export" type="button">처리 기록 엑셀 다운로드</button>
+      </div>
+      <div class="section-body">
+        <div class="log-filters" aria-label="처리 기록 거르기">
+          <label>작업
+            <select id="log-action"><option value="">전체 작업</option></select>
+          </label>
+          <label>과
+            <select id="log-department"><option value="">전체 과</option></select>
+          </label>
+          <label>문항
+            <input id="log-case-prefix" type="search" placeholder="문항 앞부분 일치" autocomplete="off">
+          </label>
+        </div>
+        <div class="table-wrap log-table">
+          <table>
+            <thead><tr><th>일시</th><th>작업</th><th>문항</th><th>과</th><th>지금 상태</th></tr></thead>
+            <tbody id="log-body"><tr><td colspan="5" class="empty">처리 기록을 불러오는 중입니다.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
     <div class="start-panels">
       <section class="section" style="margin-top:0">
         <div class="section-head"><div><h2>업무 화면</h2><p>현재 구현된 화면부터 이어서 작업합니다.</p></div></div>
         <div class="section-body route-list">
           <a class="route" href="./assign.html"><div><strong>접수·배분</strong><br><span>PDF 또는 문항목록 CSV를 등록하고 소관 과를 확정</span></div><b>열기</b></a>
-          <div class="route"><div><strong>현업 회신</strong><br><span>S6에서 구현 예정</span></div><span>준비 중</span></div>
-          <div class="route"><div><strong>취합</strong><br><span>S8에서 구현 예정</span></div><span>준비 중</span></div>
+          <a class="route" href="./dept.html"><div><strong>현업 회신</strong><br><span>내 과 문항의 회신 엑셀 제출과 재배정 요청</span></div><b>열기</b></a>
+          <a class="route" href="./collect.html"><div><strong>검사·취합</strong><br><span>회신 점검, 보완·확정과 제출본 생성</span></div><b>열기</b></a>
         </div>
       </section>
       <section class="section" style="margin-top:0">
-        <div class="section-head"><div><h2>저장 안내</h2><p>현재 단계는 서버 없이 브라우저 저장소를 사용합니다.</p></div></div>
-        <div class="section-body"><div class="notice">같은 주소라도 다른 브라우저나 다른 PC에서는 기록이 보이지 않습니다. 브라우저 데이터를 지우면 기록도 함께 삭제됩니다.</div></div>
+        <div class="section-head"><div><h2>저장 안내</h2><p>접속 주소에 따라 저장 위치가 자동으로 정해집니다.</p></div></div>
+        <div class="section-body"><div class="notice"><b>Vercel 주소</b>에서는 서버 공동 저장을 사용합니다. 그 밖의 주소에서는 현재 브라우저에만 저장되며, 브라우저 데이터를 지우면 기록도 삭제됩니다.</div></div>
       </section>
     </div>
   </main>
+  <script src="./flow.js"></script>
   <script src="./common.js"></script>
+  <script src="./lib/xlsx.full.min.js"></script>
   <script>
-    const cases = AppCommon.getCases();
-    const counts = AppCommon.statusCounts(cases);
-    document.querySelector('#total-count').textContent = cases.length;
-    document.querySelector('#received-count').textContent = counts['접수'] || 0;
-    document.querySelector('#confirmed-count').textContent = counts['배분확정'] || 0;
-    document.querySelector('#files-count').textContent = new Set(cases.map(item => item.파일명)).size;
+    (async () => {
+      let allLogs = [];
+      let filteredLogs = [];
+
+      function koreanTime(value) {
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return String(value || '-');
+        return new Intl.DateTimeFormat('ko-KR', {
+          timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit',
+          hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+        }).format(date);
+      }
+
+      function filterLogs(logs, filters) {
+        const prefix = String(filters.문항 || '').trim();
+        return logs.filter((row) =>
+          (!filters.작업 || row.작업 === filters.작업) &&
+          (!filters.과 || row.과 === filters.과) &&
+          (!prefix || String(row.문항 || '').startsWith(prefix))
+        );
+      }
+
+      function fillSelect(selector, values) {
+        const select = document.querySelector(selector);
+        for (const value of [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ko'))) {
+          const option = document.createElement('option');
+          option.value = value;
+          option.textContent = value;
+          select.append(option);
+        }
+      }
+
+      function renderLogs() {
+        filteredLogs = filterLogs(allLogs, {
+          작업: document.querySelector('#log-action').value,
+          과: document.querySelector('#log-department').value,
+          문항: document.querySelector('#log-case-prefix').value
+        });
+        document.querySelector('#log-count').textContent = `${filteredLogs.length}건 / 전체 ${allLogs.length}건`;
+        document.querySelector('#log-body').innerHTML = filteredLogs.length
+          ? filteredLogs.map((row) => `<tr><td>${AppCommon.escapeHtml(koreanTime(row.일시))}</td><td>${AppCommon.escapeHtml(row.작업 || '-')}</td><td>${AppCommon.escapeHtml(row.문항 || '-')}</td><td>${AppCommon.escapeHtml(row.과 || '-')}</td><td><span class="status">${AppCommon.escapeHtml(row.지금상태 || '-')}</span></td></tr>`).join('')
+          : '<tr><td colspan="5" class="empty">조건에 맞는 처리 기록이 없습니다.</td></tr>';
+      }
+
+      document.querySelectorAll('#log-action, #log-department').forEach((element) => element.addEventListener('change', renderLogs));
+      document.querySelector('#log-case-prefix').addEventListener('input', renderLogs);
+      document.querySelector('#log-export').addEventListener('click', () => {
+        if (!filteredLogs.length) {
+          AppCommon.showToast('내려받을 처리 기록이 없습니다.', 'error');
+          return;
+        }
+        const rows = filteredLogs.map((row) => ({
+          일시: koreanTime(row.일시), 작업: row.작업 || '', 문항: row.문항 || '',
+          과: row.과 || '', 지금상태: row.지금상태 || ''
+        }));
+        const workbook = XLSX.utils.book_new();
+        const worksheet = XLSX.utils.json_to_sheet(rows, { header: ['일시', '작업', '문항', '과', '지금상태'] });
+        worksheet['!cols'] = [{ wch: 22 }, { wch: 15 }, { wch: 30 }, { wch: 20 }, { wch: 15 }];
+        XLSX.utils.book_append_sheet(workbook, worksheet, '처리기록');
+        XLSX.writeFile(workbook, '처리기록_국회요구자료.xlsx');
+      });
+
+      try {
+        const db = await AppCommon.getDb();
+        const cases = db.cases || [];
+        const counts = AppCommon.statusCounts(cases);
+        document.querySelector('#total-count').textContent = cases.length;
+        document.querySelector('#received-count').textContent = counts['접수'] || 0;
+        document.querySelector('#confirmed-count').textContent = (counts['배분확정'] || 0) + (counts['회신중'] || 0) + (counts['회신완료'] || 0);
+        document.querySelector('#files-count').textContent = new Set(cases.map(item => item.파일명)).size;
+        const states = new Map(cases.map((item) => [item.id, item.상태]));
+        allLogs = (db.log || []).map((row) => ({ ...row, 지금상태: states.get(row.문항) || '' }));
+        fillSelect('#log-action', allLogs.map((row) => row.작업));
+        fillSelect('#log-department', allLogs.map((row) => row.과));
+        renderLogs();
+        window.LogView = { filterLogs, koreanTime, get filteredLogs() { return filteredLogs; } };
+      } catch (error) { AppCommon.showToast(error.message, 'error'); }
+    })();
   </script>
 </body>
 </html>

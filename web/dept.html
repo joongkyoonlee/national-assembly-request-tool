@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>현업 회신 | A부 국회 요구자료 대응</title>
+  <link rel="stylesheet" href="./app.css">
+</head>
+<body>
+  <div class="top-rule"></div>
+  <header class="site-head">
+    <div class="shell head-row">
+      <a class="brand" href="./index.html"><span class="brand-mark">A</span><span>국회 요구자료 대응</span></a>
+      <nav class="main-nav" aria-label="주요 화면">
+        <a href="./index.html">시작 화면</a><a href="./assign.html">배분</a>
+        <a class="active" href="./dept.html">현업 회신</a>
+        <a href="./collect.html">취합</a>
+      </nav>
+    </div>
+  </header>
+  <main class="shell">
+    <div class="page-title">
+      <div><span class="badge">현업 담당 화면</span><h1>내 과 문항 회신하기</h1><p>배분된 문항을 확인하고 회신 엑셀을 제출하거나 재배정을 요청합니다.</p></div>
+      <div class="storage-mode" data-storage-mode>저장 위치 확인 중</div>
+    </div>
+
+    <section class="section" style="margin-top:0">
+      <div class="section-head">
+        <div><h2>내 과 선택</h2><p>선택한 과가 주관 또는 협조로 배분된 문항만 표시합니다.</p></div>
+        <label class="department-picker">내 과
+          <select id="department-select"><option value="">과를 선택하세요</option></select>
+        </label>
+      </div>
+    </section>
+
+    <section class="reply-grid" id="reply-list" aria-live="polite"></section>
+    <div class="empty section" id="reply-empty">내 과를 선택하세요.</div>
+  </main>
+
+  <script src="./engine.js"></script>
+  <script src="./flow.js"></script>
+  <script src="./validate.js"></script>
+  <script src="./common.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script>
+    const departmentSelect = document.querySelector('#department-select');
+    const replyList = document.querySelector('#reply-list');
+    const replyEmpty = document.querySelector('#reply-empty');
+    const selectedFiles = new Map();
+    let organizations = [];
+    let historyRows = [];
+
+    function assigned(item, department) {
+      return item.주관과 === department || (Array.isArray(item.협조과) && item.협조과.includes(department));
+    }
+    function options(selected = '') {
+      return `<option value="">희망 과 없음</option>${organizations.map((row) => `<option value="${AppCommon.escapeHtml(row.과)}" ${row.과 === selected ? 'selected' : ''}>${AppCommon.escapeHtml(row.과)}</option>`).join('')}`;
+    }
+    function validationMarkup(issues = []) {
+      return issues.length
+        ? `<div class="validation-result bad"><b>확인필요 ${issues.length}건</b><ul>${issues.map((entry) => `<li>${entry.행 ? `${entry.행}행 · ` : ''}${AppCommon.escapeHtml(entry.내용)}</li>`).join('')}</ul></div>`
+        : '<div class="validation-result good"><b>점검 결과 이상 없음</b></div>';
+    }
+    async function render() {
+      const department = departmentSelect.value;
+      if (!department) {
+        replyList.innerHTML = '';
+        replyEmpty.hidden = false;
+        replyEmpty.textContent = '내 과를 선택하세요.';
+        return;
+      }
+      const cases = (await AppCommon.getCases()).filter((item) => assigned(item, department));
+      replyEmpty.hidden = cases.length > 0;
+      replyEmpty.textContent = `${department}에 배분된 문항이 없습니다.`;
+      replyList.innerHTML = cases.map((item) => {
+        const reply = item['과별 회신']?.[department];
+        const pendingSupplement = item.상태 === '보완요청' ? [...(item.보완 || [])].reverse().find((entry) => !entry.완료) : null;
+        const closed = ['회신완료', '재배정요청', '확정'].includes(item.상태) || (pendingSupplement && pendingSupplement.과 !== department);
+        const role = item.주관과 === department ? '주관' : '협조';
+        return `<article class="reply-card" data-id="${AppCommon.escapeHtml(item.id)}">
+          <div class="reply-card-head"><div><span class="status ${item.상태 !== '접수' ? 'confirmed' : ''}">${AppCommon.escapeHtml(item.상태)}</span><span class="role-badge">${role}</span></div><b>${AppCommon.escapeHtml(item.의원)}-${AppCommon.escapeHtml(item.문항번호)}</b></div>
+          <h2>${AppCommon.escapeHtml(item.요구내용)}</h2>
+          ${item.세부항목 ? `<p class="minor">${AppCommon.escapeHtml(item.세부항목)}</p>` : ''}
+          <dl class="case-meta"><div><dt>위원회</dt><dd>${AppCommon.escapeHtml(item.위원회)}</dd></div><div><dt>제출기한</dt><dd>${AppCommon.escapeHtml(item.제출기한 || '-')}</dd></div></dl>
+          ${AppCommon.historyMarkup(item, historyRows)}
+          ${reply ? `<div class="saved-reply">최근 회신: <b>${AppCommon.escapeHtml(reply.파일명 || '파일명 없음')}</b> · ${AppCommon.escapeHtml(reply.일시 || '')}</div>` : ''}
+          ${pendingSupplement?.과 === department ? `<div class="reassignment"><b>보완 사유</b>${AppCommon.escapeHtml(pendingSupplement.사유)}</div>` : ''}
+          <div class="validation-slot">${reply?.확인필요 ? validationMarkup(reply.확인필요) : ''}</div>
+          <div class="reply-form">
+            <label class="file-button"><input class="reply-file" type="file" accept=".xlsx,.xls"><span>${reply?.파일명 ? '회신 엑셀 바꾸기' : '회신 엑셀 올리기'}</span></label>
+            <span class="selected-file">${AppCommon.escapeHtml(reply?.파일명 || '선택된 파일 없음')}</span>
+            <label>메모<textarea class="reply-memo" rows="3" placeholder="자료 없음 등 필요한 설명">${AppCommon.escapeHtml(reply?.메모 || '')}</textarea></label>
+            <button class="btn teal submit-reply" type="button" ${closed ? 'disabled' : ''}>회신 제출</button>
+          </div>
+          <details class="reassign-form" ${item.상태 === '재배정요청' ? 'open' : ''}>
+            <summary>재배정 요청</summary>
+            <label>사유 <textarea class="reassign-reason" rows="2" placeholder="필수 입력"></textarea></label>
+            <label>희망 과 <select class="wanted-department">${options()}</select></label>
+            <button class="btn request-reassign" type="button" ${closed ? 'disabled' : ''}>재배정 요청</button>
+          </details>
+        </article>`;
+      }).join('');
+    }
+
+    departmentSelect.addEventListener('change', () => {
+      localStorage.setItem('a부_내과', departmentSelect.value);
+      selectedFiles.clear();
+      render().catch((error) => AppCommon.showToast(error.message, 'error'));
+    });
+    replyList.addEventListener('change', async (event) => {
+      const input = event.target.closest('.reply-file');
+      if (!input) return;
+      const card = input.closest('.reply-card');
+      const file = input.files[0];
+      if (!file) return;
+      try {
+        if (!globalThis.XLSX) throw new Error('엑셀 읽기 도구를 불러오지 못했습니다. 인터넷 연결을 확인하세요.');
+        const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: false });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: '' });
+        const item = (await AppCommon.getCases()).find((entry) => entry.id === card.dataset.id);
+        const currentYear = Number(String(item.제출기한 || '').slice(0, 4)) || new Date().getFullYear();
+        const validation = DataValidator.validateReply(rows, item.요구내용, { currentYear });
+        selectedFiles.set(card.dataset.id, { file, rows, validation });
+        card.querySelector('.selected-file').textContent = file.name;
+        card.querySelector('.validation-slot').innerHTML = validationMarkup(validation.확인필요);
+      } catch (error) {
+        input.value = '';
+        selectedFiles.delete(card.dataset.id);
+        AppCommon.showToast(error.message, 'error');
+      }
+    });
+    replyList.addEventListener('click', async (event) => {
+      const card = event.target.closest('.reply-card');
+      if (!card) return;
+      const department = departmentSelect.value;
+      try {
+        if (event.target.closest('.submit-reply')) {
+          const selected = selectedFiles.get(card.dataset.id);
+          const existing = (await AppCommon.getCases()).find((item) => item.id === card.dataset.id)?.['과별 회신']?.[department];
+          const filename = selected?.file?.name || existing?.파일명 || '';
+          if (!filename) throw new Error('회신 엑셀을 먼저 선택하세요.');
+          if (!selected && !existing?.행) throw new Error('회신 엑셀을 다시 선택해 점검하세요.');
+          const issues = selected?.validation?.확인필요 || existing?.확인필요 || [];
+          if (issues.length && !confirm(`확인필요 ${issues.length}건이 있습니다. 원본 값을 고치지 않고 이대로 제출하시겠습니까?`)) return;
+          await AppCommon.applyRequest({
+            작업: '회신', id: card.dataset.id, 과: department, 파일명: filename,
+            행: selected?.rows || existing?.행 || [], 메모: card.querySelector('.reply-memo').value, 확인필요: issues
+          });
+          selectedFiles.delete(card.dataset.id);
+          AppCommon.showToast('회신을 제출했습니다.');
+          await render();
+        }
+        if (event.target.closest('.request-reassign')) {
+          const reason = card.querySelector('.reassign-reason').value.trim();
+          if (!reason) throw new Error('재배정 사유를 입력하세요.');
+          await AppCommon.applyRequest({ 작업: '재배정요청', id: card.dataset.id, 과: department, 사유: reason, 희망과: card.querySelector('.wanted-department').value });
+          AppCommon.showToast('재배정 요청을 등록했습니다.');
+          await render();
+        }
+      } catch (error) { AppCommon.showToast(error.message, 'error'); }
+    });
+
+    (async () => {
+      try {
+        const reference = await AppCommon.loadReferenceData();
+        organizations = reference.organization;
+        historyRows = reference.history;
+        departmentSelect.insertAdjacentHTML('beforeend', organizations.map((row) => `<option value="${AppCommon.escapeHtml(row.과)}">${AppCommon.escapeHtml(row.과)}</option>`).join(''));
+        const remembered = localStorage.getItem('a부_내과');
+        if (organizations.some((row) => row.과 === remembered)) departmentSelect.value = remembered;
+        await render();
+      } catch (error) {
+        replyEmpty.textContent = error.message;
+        AppCommon.showToast(error.message, 'error');
+      }
+    })();
+  </script>
+</body>
+</html>

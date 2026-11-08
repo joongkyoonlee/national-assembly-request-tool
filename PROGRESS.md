@@ -2,6 +2,7 @@
 
 | 날짜 | 단계 | 완료 | 남은 일 | 막힌 점 / 질문 |
 |---|---|---|---|---|
+| 11/8 | 배포 CLI 설치 | Cloudflare Wrangler 4.158.0, Vercel CLI 65.2.0, Netlify CLI 27.14.2, GitHub CLI 2.65.0 설치·실행 확인; Wrangler 로컬 상태 폴더를 Git 제외 처리 | 각 서비스 로그인은 실제 사용 시 진행 | Wrangler 설치 충돌 폴더는 `wrangler-corrupt-20261108212158` 이름으로 복구 보관 |
 | 11/8 | 외부 호스팅 정리 | 사용자 요청에 따라 Netlify split-sum 사이트와 Vercel national-assembly-request-tool 프로젝트·배포를 영구 삭제; 두 주소 404 및 프로젝트 목록 제거 확인 | 없음 | GitHub 저장소·GitHub Pages는 유지 |
 | 11/8 | Netlify 404 복구 | split-sum 사이트가 올바른 GitHub 저장소·main에 연결됐지만 Publish directory가 비어 저장소 루트를 배포한 원인 확인; netlify.toml에서 docs를 게시 폴더로 지정하고 Production 재배포 완료; https://split-sum.netlify.app 및 배분 화면·CSV·PDF.js HTTP 200 확인 | 없음 | 없음 |
 | 11/8 | Vercel 404 복구 | Vercel 프로젝트·배포 로그 점검 결과 저장소 루트에 index.html이 없어 404가 발생함을 확인; vercel.json에서 출력 폴더를 docs로 지정하고 Production 재배포 완료; https://national-assembly-request-tool.vercel.app 및 화면·CSV·PDF.js 자원 HTTP 200 확인 | 없음 | 없음 |
@@ -20,3 +21,26 @@
 | 11/8 | 조직도 JSON 변환 | to_json.js로 조직도 CSV를 org.json 배열로 변환하고 대표키워드를 배열화 | 실행 결과 검증 | 없음 |
 | 11/8 | 소관 과 웹 엔진 | CSV 기반 web/engine.js와 40건 평가용 test_engine.js 작성; Node·브라우저 공용 초기화 지원 | 40건 시험 실행 | 없음 |
 | 11/8 | 배분 규칙 정확도 보강 | 원본은 유지하고 data/rules_보강.csv에서 R001 예산·R056 언론 우선순위를 2→1로 변경; 시험 1순위 28/40→40/40, 3순위 40/40 유지; 접수대장 1순위 441/520→498/520; 새 오답 0건; add-assign-rule 프로젝트 스킬 생성 | 없음 | 조직도 밖 과 0건, 공용 스킬로 설치하지 않음 |
+| 11/8 | 서버 상태 흐름 S5 | web/flow.js의 단일 apply 함수로 접수·배분·회신·재배정요청 상태 규칙과 400·403·409 거부를 구현하고, api/app.js에 Vercel Blob cases.json 전체 조회·저장 및 api/org.json 26개 과 검증을 연결; 설계서 밖 필드와 이름·연락처 계열 값 제거; test_api.js 가짜 저장소 시험 12건 통과 | S7 AI추천, S8 보완요청·확정을 같은 cases.json 흐름에 추가 | 실제 Vercel Blob 연결 시험은 BLOB_READ_WRITE_TOKEN이 있는 배포 환경에서 필요 |
+| 11/8 | 현업 회신 화면 S6 | common.js를 Vercel API/그 밖 브라우저 저장 자동 선택 방식으로 통합하고 index·assign 화면에 저장 위치 표시; dept.html에서 내 과 문항 카드, 회신 엑셀·메모 제출, 사유·희망 과 재배정 요청 구현; assign에 재배정 사유·희망 과와 재배분 구현; 520건 접수대장의 1순위 근거 키워드 과거 이력 요약·최근 5건을 두 화면에 표시 | S7 AI추천, S8 취합 | 로컬 브라우저에서 78문항 접수→1순위 기본 선택→배분→내 과 카드 표시 확인; 실제 Vercel Blob 연결은 배포 환경에서 필요 |
+| 11/8 | AI 배분 추천 S7 | api/app.js의 AI추천 POST에서 gpt-4o-mini Chat Completions·temperature 0·JSON 응답을 호출하고 org.json 허용 과만 최대 3개로 정제; OPENAI_API_KEY 누락 안내 구현; 규칙 후보 없는 문항에만 AI 추천 버튼과 별도 색상을 표시하고 배분 확정방법을 규칙/AI/수정으로 자동 판정 | S8 취합 | 가짜 OpenAI 정상·해당없음·목록 밖 과 응답과 키 누락을 포함한 API 시험 16건 통과; 78문항 중 규칙 후보 없는 4건에만 버튼 표시 확인; 실제 API 호출은 키가 있는 배포 환경에서 필요 |
+| 11/8 | 검사·취합 화면 S8 | validate.js에 회신 형식·연도 누락·예산 초과 무사유·합계 불일치와 접수대장 조직도·기간·기한·중복·공백 검증 구현; dept에서 엑셀 선택 즉시 점검·이상 제출 재확인; collect에서 과별 취합표·확인필요·보완·확정·상태 현황·과별 차트·접수대장 점검·확정 문항만 포함하는 엑셀/Markdown 제출본 구현; flow에 보완요청·확정 및 보완 대상 과만 재회신 규칙 추가 | 없음 | 검증 시험 3묶음, API 21건 통과; 검증용 접수대장 120행의 준비된 이상 9건 표시; 제출본 엑셀 2시트와 Markdown 다운로드·내용 확인; 실제 Vercel 저장은 배포 환경에서 추가 확인 필요 |
+| 11/9 | 시작 화면 처리 기록 | index.html에 작업·과·문항 앞부분 필터, 현재 상태 열, 한국시간 표시, 필터 건수와 필터 결과 그대로의 처리 기록 엑셀 저장 추가; 로컬 SheetJS와 test_web.py 구성 | 없음 | 웹 시험 2건 통과: 산업정책과 화면 2건=엑셀 2행, 문항 앞부분 일치 2건; 기존 검증 3묶음·API 21건 재통과; api/와 flow.js는 변경하지 않음 |
+| 11/9 | 취합 화면 기한 임박 | collect.html에 검사·확정/기한 임박/현황·제출본 탭을 구성하고, 기준일·임박 일수·발신 입력에 따라 미회신 담당 과와 미완료 보완 과를 산출; D-n·D-day·기한 경과 구분, 날짜 확인필요 분리, 독촉목록 엑셀 2시트와 과별 안내문 txt 다운로드 추가 | 없음 | 웹 시험 7건 통과: D-1·기한 경과·대상 0건, 독촉목록 2행·확인필요 1행, 안내문 필수 항목 확인; 기존 검증 3묶음·API 21건 재통과; 자동 발송 없음, api/와 flow.js 변경 없음 |
+| 11/9 | v1.0 배포 전 점검 | 커밋 후보 46개 파일의 비밀값·개인정보 패턴 검사, Blob 공개 저장·환경변수 사용 확인, API 21건·검증 3묶음·배분 35/40·웹 7건 통과 | web/을 배포 폴더 docs/에 동기화한 뒤 재점검·배포 | 예정 v1.0 주소 `https://national-assembly-request-tool.vercel.app/`와 `/api/app` 모두 404; GitHub Pages는 200이나 이전 docs 화면이며 최신 web과 불일치하므로 현재 배포 판정은 보류 |
+
+## v1.0 배포 후 확인 체크리스트
+
+- 예정 주소: https://national-assembly-request-tool.vercel.app/
+- 2026-11-09 배포 전 확인 결과: 루트·`/web/index.html`·`/api/app` 모두 404. 최신 `web/`과 배포 대상 `docs/`가 일치하지 않아 v1.0 배포 전 단계에서 보류함.
+- [ ] `web/`의 최신 화면·스크립트·data·lib를 `docs/`에 동기화하고 주요 파일 해시가 같은지 확인한다.
+- [ ] 루트 주소가 200으로 열리고 시작 화면의 상태 카드·처리 기록 필터·엑셀 다운로드가 보이는지 확인한다.
+- [ ] 배분 화면에서 접수·규칙 후보·AI 추천·배분 확정이 동작하는지 확인한다.
+- [ ] 현업 회신 화면에서 과 선택·엑셀 즉시 점검·회신·재배정 요청이 동작하는지 확인한다.
+- [ ] 취합 화면의 검사·확정, 기한 임박, 현황·제출본 탭이 열리는지 확인한다.
+- [ ] 독촉 목록 엑셀의 `독촉목록`·`확인필요` 시트와 과별 안내문 TXT가 내려받아지는지 확인한다.
+- [ ] `/api/app` GET이 200 JSON을 반환하고, 상태 변경 후 새로고침해도 Blob의 `cases.json`에 유지되는지 확인한다.
+- [ ] `BLOB_READ_WRITE_TOKEN`과 `OPENAI_API_KEY`가 Vercel 환경변수에만 설정됐는지 확인한다.
+- [ ] 규칙 후보가 없는 문항의 AI 추천이 동작하고 조직도 밖 과가 제거되는지 확인한다.
+- [ ] `node test_api.js`, `node test_validate.js`, `node test_engine.js`, `python test_web.py`를 다시 실행해 모두 통과하는지 확인한다.
+- [ ] 배포 직전 `git status`와 비밀값·개인정보 검사를 다시 실행하고 예상하지 않은 파일이 없는지 확인한다.

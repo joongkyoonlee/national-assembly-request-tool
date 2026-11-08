@@ -13,8 +13,8 @@
       <a class="brand" href="./index.html"><span class="brand-mark">A</span><span>국회 요구자료 대응</span></a>
       <nav class="main-nav" aria-label="주요 화면">
         <a href="./index.html">시작 화면</a><a class="active" href="./assign.html">배분</a>
-        <a class="future" href="./dept.html" aria-disabled="true">현업 회신 · S6</a>
-        <a class="future" href="./collect.html" aria-disabled="true">취합 · S8</a>
+        <a href="./dept.html">현업 회신</a>
+        <a href="./collect.html">취합</a>
       </nav>
     </div>
   </header>
@@ -22,7 +22,7 @@
   <main class="shell">
     <div class="page-title">
       <div><span class="badge">총괄 담당 화면</span><h1>접수하고 배분하기</h1><p>요구서를 문항으로 나눈 뒤 후보 근거를 확인하고 주관·협조 과를 확정합니다.</p></div>
-      <div class="minor">저장 위치: 현재 브라우저</div>
+      <div class="storage-mode" data-storage-mode>저장 위치 확인 중</div>
     </div>
 
     <section class="section" id="receive-section">
@@ -72,6 +72,7 @@
   </main>
 
   <script src="./engine.js"></script>
+  <script src="./flow.js"></script>
   <script src="./common.js"></script>
   <script src="./split.js"></script>
   <script type="module">
@@ -95,6 +96,9 @@
     const caseCount = document.querySelector('#case-count');
     let stagedRows = [];
     let organizations = [];
+    let historyRows = [];
+    const aiCandidates = new Map();
+    const aiNoMatch = new Set();
 
     function setProgress(done, total, label) {
       const percent = total ? Math.round(done / total * 100) : 0;
@@ -172,11 +176,18 @@
       }
     });
 
-    registerButton.addEventListener('click', () => {
-      const result = AppCommon.registerCases(stagedRows);
-      AppCommon.showToast(`${result.added}개 문항을 접수했습니다${result.skipped ? ` · 중복 ${result.skipped}개 제외` : ''}.`);
-      renderAllocation();
-      document.querySelector('#assign-section').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    registerButton.addEventListener('click', async () => {
+      registerButton.disabled = true;
+      try {
+        const result = await AppCommon.registerCases(stagedRows);
+        AppCommon.showToast(`${result.added}개 문항을 접수했습니다${result.skipped ? ` · 중복 ${result.skipped}개 제외` : ''}.`);
+        await renderAllocation();
+        document.querySelector('#assign-section').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+      } catch (error) {
+        AppCommon.showToast(error.message, 'error');
+      } finally {
+        registerButton.disabled = !stagedRows.length;
+      }
     });
 
     function optionMarkup(selected = '') {
@@ -187,21 +198,30 @@
       return organizations.map(row => `<option value="${AppCommon.escapeHtml(row.과)}" ${selected.includes(row.과) ? 'selected' : ''}>${AppCommon.escapeHtml(row.과)}</option>`).join('');
     }
 
-    function renderAllocation() {
-      const cases = AppCommon.getCases();
+    async function renderAllocation() {
+      const cases = await AppCommon.getCases();
       caseCount.textContent = `${cases.length}개 문항`;
       allocationBody.innerHTML = cases.map(item => {
-        const candidates = item.후보?.length
-          ? item.후보.map((candidate, index) => `<div class="candidate"><b>${index + 1}. ${AppCommon.escapeHtml(candidate.과)}</b><small>${AppCommon.escapeHtml(candidate.근거키워드)} · 우선순위 ${candidate.우선순위 ?? candidate.점수}</small></div>`).join('')
-          : '<span class="minor">맞는 규칙 없음 · 확인필요</span>';
+        const ruleCandidates = (item.후보 || []).filter(candidate => candidate.근거키워드);
+        const savedAiCandidates = (item.후보 || []).filter(candidate => candidate.근거 && !candidate.근거키워드);
+        const shownCandidates = ruleCandidates.length ? ruleCandidates : (aiCandidates.get(item.id) || savedAiCandidates);
+        const candidateSource = ruleCandidates.length ? '규칙' : 'AI';
+        const candidates = shownCandidates.length
+          ? shownCandidates.map((candidate, index) => `<div class="candidate ${candidateSource === 'AI' ? 'ai' : ''}"><b>${index + 1}. ${AppCommon.escapeHtml(candidate.과)}</b><small>${candidateSource === 'AI' ? AppCommon.escapeHtml(candidate.근거) : `${AppCommon.escapeHtml(candidate.근거키워드)} · 우선순위 ${candidate.우선순위 ?? candidate.점수}`}</small></div>`).join('')
+          : `<span class="minor">${aiNoMatch.has(item.id) ? 'AI 추천도 해당 과 없음' : '맞는 규칙 없음 · 확인필요'}</span>`;
+        const aiButton = !ruleCandidates.length && !shownCandidates.length
+          ? `<button class="btn ai-recommend-button" type="button">AI 추천</button>` : '';
+        const lastReassignment = Array.isArray(item.재배정) ? item.재배정.at(-1) : null;
+        const reassignment = item.상태 === '재배정요청' && lastReassignment
+          ? `<div class="reassignment"><b>재배정 사유</b>${AppCommon.escapeHtml(lastReassignment.사유)}<small>요청 과 ${AppCommon.escapeHtml(lastReassignment.과)}${lastReassignment.희망과 ? ` · 희망 과 ${AppCommon.escapeHtml(lastReassignment.희망과)}` : ''}</small></div>` : '';
         return `<tr data-id="${AppCommon.escapeHtml(item.id)}">
-          <td><span class="status ${item.상태 === '배분확정' ? 'confirmed' : ''}">${AppCommon.escapeHtml(item.상태)}</span></td>
+          <td><span class="status ${['배분확정','회신중','회신완료'].includes(item.상태) ? 'confirmed' : ''}">${AppCommon.escapeHtml(item.상태)}</span>${reassignment}</td>
           <td><b>${AppCommon.escapeHtml(item.의원)}-${AppCommon.escapeHtml(item.문항번호)}</b><br><span class="minor">${AppCommon.escapeHtml(item.위원회)}</span></td>
-          <td class="requirement">${AppCommon.escapeHtml(item.요구내용)}${item.세부항목 ? `<br><span class="minor">${AppCommon.escapeHtml(item.세부항목)}</span>` : ''}</td>
-          <td><div class="candidate-list">${candidates}</div></td>
-          <td><label class="sr-only" for="lead-${AppCommon.escapeHtml(item.id)}">주관 과</label><select class="lead-select">${optionMarkup(item.주관과)}</select></td>
+          <td class="requirement">${AppCommon.escapeHtml(item.요구내용)}${item.세부항목 ? `<br><span class="minor">${AppCommon.escapeHtml(item.세부항목)}</span>` : ''}${AppCommon.historyMarkup(item, historyRows)}</td>
+          <td><div class="candidate-list">${candidates}${aiButton}</div></td>
+          <td><label class="sr-only" for="lead-${AppCommon.escapeHtml(item.id)}">주관 과</label><select class="lead-select">${optionMarkup(item.주관과 || shownCandidates[0]?.과)}</select></td>
           <td><label class="sr-only">협조 과</label><select class="support-select" multiple>${collaboratorMarkup(item.협조과 || [])}</select><span class="minor">Ctrl 키로 여러 개 선택</span></td>
-          <td><button class="btn teal confirm-button" type="button">${item.상태 === '배분확정' ? '다시 확정' : '배분 확정'}</button>${item.확정방법 ? `<br><span class="minor">${AppCommon.escapeHtml(item.확정방법)}</span>` : ''}</td>
+          <td><button class="btn teal confirm-button" type="button">${item.상태 === '재배정요청' || item.상태 === '배분확정' ? '다시 배분' : '배분 확정'}</button>${item.확정방법 ? `<br><span class="minor">${AppCommon.escapeHtml(item.확정방법)}</span>` : ''}</td>
         </tr>`;
       }).join('');
       allocationLoading.hidden = true;
@@ -209,12 +229,31 @@
       allocationEmpty.hidden = cases.length > 0;
     }
 
-    allocationBody.addEventListener('click', event => {
+    allocationBody.addEventListener('click', async event => {
+      const aiButton = event.target.closest('.ai-recommend-button');
+      if (aiButton) {
+        const row = aiButton.closest('tr');
+        const current = (await AppCommon.getCases()).find(item => item.id === row.dataset.id);
+        aiButton.disabled = true;
+        aiButton.textContent = '추천 중…';
+        try {
+          const result = await AppCommon.applyRequest({ 작업: 'AI추천', 요구내용: current.요구내용 });
+          aiCandidates.set(current.id, result.후보 || []);
+          if (result.해당없음) aiNoMatch.add(current.id); else aiNoMatch.delete(current.id);
+          AppCommon.showToast(result.해당없음 ? 'AI 추천에서도 맞는 과를 찾지 못했습니다.' : `AI가 ${result.후보.length}개 과를 추천했습니다.`);
+          await renderAllocation();
+        } catch (error) {
+          AppCommon.showToast(error.message, 'error');
+          aiButton.disabled = false;
+          aiButton.textContent = 'AI 추천';
+        }
+        return;
+      }
       const button = event.target.closest('.confirm-button');
       if (!button) return;
       const row = button.closest('tr');
       const caseId = row.dataset.id;
-      const current = AppCommon.getCases().find(item => item.id === caseId);
+      const current = (await AppCommon.getCases()).find(item => item.id === caseId);
       const lead = row.querySelector('.lead-select').value;
       const support = [...row.querySelector('.support-select').selectedOptions].map(option => option.value).filter(value => value !== lead);
       if (!lead) {
@@ -222,15 +261,25 @@
         row.querySelector('.lead-select').focus();
         return;
       }
-      const method = lead === current.후보?.[0]?.과 ? '규칙' : '수정';
-      AppCommon.updateCase(caseId, { 상태: '배분확정', 주관과: lead, 협조과: support, 확정방법: method, 확정일시: new Date().toISOString() }, '배분확정');
-      AppCommon.showToast(`${current.의원}-${current.문항번호} 문항을 ${lead}로 확정했습니다.`);
-      renderAllocation();
+      const ruleCandidates = (current.후보 || []).filter(candidate => candidate.근거키워드);
+      const currentAiCandidates = aiCandidates.get(caseId) || (current.후보 || []).filter(candidate => candidate.근거 && !candidate.근거키워드);
+      const method = ruleCandidates.some(candidate => candidate.과 === lead)
+        ? '규칙' : currentAiCandidates.some(candidate => candidate.과 === lead) ? 'AI' : '수정';
+      const candidatesToSave = ruleCandidates.length ? ruleCandidates : currentAiCandidates;
+      try {
+        await AppCommon.applyRequest({ 작업: '배분', id: caseId, 주관과: lead, 협조과: support, 확정방법: method, 후보: candidatesToSave });
+        AppCommon.showToast(`${current.의원}-${current.문항번호} 문항을 ${lead}로 확정했습니다.`);
+        await renderAllocation();
+      } catch (error) {
+        AppCommon.showToast(error.message, 'error');
+      }
     });
 
     try {
-      organizations = await AppCommon.loadReferenceData();
-      renderAllocation();
+      const reference = await AppCommon.loadReferenceData();
+      organizations = reference.organization;
+      historyRows = reference.history;
+      await renderAllocation();
     } catch (error) {
       allocationLoading.hidden = true;
       allocationEmpty.hidden = false;

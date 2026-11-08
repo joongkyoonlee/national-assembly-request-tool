@@ -7,6 +7,8 @@
 node_modules/
 .vercel/
 .netlify/
+.wrangler/
+.playwright-cli/
 
 # 실행 결과와 임시 파일
 output/

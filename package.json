@@ -1,0 +1,13 @@
+{
+  "name": "national-assembly-request-tool",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "test": "node test_validate.js && node test_api.js",
+    "test:api": "node test_api.js",
+    "test:validate": "node test_validate.js"
+  },
+  "dependencies": {
+    "@vercel/blob": "^2.0.0"
+  }
+}

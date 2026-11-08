@@ -6,6 +6,7 @@
 # 의존성
 node_modules/
 .vercel/
+.netlify/
 
 # 실행 결과와 임시 파일
 output/

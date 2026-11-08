@@ -1,0 +1,29 @@
+# 비밀값과 로컬 환경
+.env
+.env.*
+!.env.example
+
+# 의존성
+node_modules/
+
+# 실행 결과와 임시 파일
+output/
+tmp/
+results/
+artifacts/
+*.log
+*.tmp
+*.cache
+
+# 언어·도구 캐시
+__pycache__/
+*.py[cod]
+.pytest_cache/
+coverage/
+
+# 운영체제 파일
+.DS_Store
+Thumbs.db
+
+# 공개 저장소에 포함하지 않는 잠금 완성본
+99_완성본_잠금/

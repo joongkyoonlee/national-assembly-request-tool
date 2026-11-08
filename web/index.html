@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>A부 국회 요구자료 대응</title>
+  <link rel="stylesheet" href="./app.css">
+</head>
+<body>
+  <div class="top-rule"></div>
+  <header class="site-head">
+    <div class="shell head-row">
+      <a class="brand" href="./index.html"><span class="brand-mark">A</span><span>국회 요구자료 대응</span></a>
+      <nav class="main-nav" aria-label="주요 화면">
+        <a class="active" href="./index.html">시작 화면</a><a href="./assign.html">배분</a>
+        <a class="future" href="./dept.html" aria-disabled="true">현업 회신 · S6</a>
+        <a class="future" href="./collect.html" aria-disabled="true">취합 · S8</a>
+      </nav>
+    </div>
+  </header>
+  <main class="shell">
+    <div class="page-title">
+      <div><span class="badge">교육용 가상 자료</span><h1>요구자료 처리 현황</h1><p>접수한 문항과 배분 상태를 이 브라우저에 저장합니다. 배분 판단과 확정은 담당자가 수행합니다.</p></div>
+    </div>
+    <section class="dashboard-grid" aria-label="처리 현황">
+      <article class="metric"><strong id="total-count">0</strong><span>전체 문항</span></article>
+      <article class="metric"><strong id="received-count">0</strong><span>접수</span></article>
+      <article class="metric"><strong id="confirmed-count">0</strong><span>배분확정</span></article>
+      <article class="metric"><strong id="files-count">0</strong><span>요구서 파일</span></article>
+    </section>
+    <div class="start-panels">
+      <section class="section" style="margin-top:0">
+        <div class="section-head"><div><h2>업무 화면</h2><p>현재 구현된 화면부터 이어서 작업합니다.</p></div></div>
+        <div class="section-body route-list">
+          <a class="route" href="./assign.html"><div><strong>접수·배분</strong><br><span>PDF 또는 문항목록 CSV를 등록하고 소관 과를 확정</span></div><b>열기</b></a>
+          <div class="route"><div><strong>현업 회신</strong><br><span>S6에서 구현 예정</span></div><span>준비 중</span></div>
+          <div class="route"><div><strong>취합</strong><br><span>S8에서 구현 예정</span></div><span>준비 중</span></div>
+        </div>
+      </section>
+      <section class="section" style="margin-top:0">
+        <div class="section-head"><div><h2>저장 안내</h2><p>현재 단계는 서버 없이 브라우저 저장소를 사용합니다.</p></div></div>
+        <div class="section-body"><div class="notice">같은 주소라도 다른 브라우저나 다른 PC에서는 기록이 보이지 않습니다. 브라우저 데이터를 지우면 기록도 함께 삭제됩니다.</div></div>
+      </section>
+    </div>
+  </main>
+  <script src="./common.js"></script>
+  <script>
+    const cases = AppCommon.getCases();
+    const counts = AppCommon.statusCounts(cases);
+    document.querySelector('#total-count').textContent = cases.length;
+    document.querySelector('#received-count').textContent = counts['접수'] || 0;
+    document.querySelector('#confirmed-count').textContent = counts['배분확정'] || 0;
+    document.querySelector('#files-count').textContent = new Set(cases.map(item => item.파일명)).size;
+  </script>
+</body>
+</html>

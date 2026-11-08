@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>접수·배분 | A부 국회 요구자료 대응</title>
+  <link rel="stylesheet" href="./app.css">
+</head>
+<body>
+  <div class="top-rule"></div>
+  <header class="site-head">
+    <div class="shell head-row">
+      <a class="brand" href="./index.html"><span class="brand-mark">A</span><span>국회 요구자료 대응</span></a>
+      <nav class="main-nav" aria-label="주요 화면">
+        <a href="./index.html">시작 화면</a><a class="active" href="./assign.html">배분</a>
+        <a class="future" href="./dept.html" aria-disabled="true">현업 회신 · S6</a>
+        <a class="future" href="./collect.html" aria-disabled="true">취합 · S8</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="shell">
+    <div class="page-title">
+      <div><span class="badge">총괄 담당 화면</span><h1>접수하고 배분하기</h1><p>요구서를 문항으로 나눈 뒤 후보 근거를 확인하고 주관·협조 과를 확정합니다.</p></div>
+      <div class="minor">저장 위치: 현재 브라우저</div>
+    </div>
+
+    <section class="section" id="receive-section">
+      <div class="section-head">
+        <div><h2><span class="step-no">1</span>접수</h2><p>PDF 여러 건 또는 기존 문항목록 CSV를 불러옵니다.</p></div>
+        <div class="actions"><button class="btn primary" id="register-button" type="button" disabled>접수 등록</button></div>
+      </div>
+      <div class="section-body">
+        <div class="source-grid">
+          <label class="drop-zone">
+            <input id="pdf-input" type="file" accept="application/pdf,.pdf" multiple>
+            <span><strong>요구서 PDF 선택</strong><small>여러 파일을 한 번에 선택할 수 있습니다.</small></span>
+          </label>
+          <label class="drop-zone">
+            <input id="csv-input" type="file" accept="text/csv,.csv">
+            <span><strong>문항목록 CSV 선택</strong><small>파일명·위원회·의원·제출기한·문항번호 열을 읽습니다.</small></span>
+          </label>
+        </div>
+        <div class="progress" id="progress" aria-live="polite">
+          <div class="progress-line"><span id="progress-bar"></span></div>
+          <div class="progress-text"><span id="progress-label">파일을 읽는 중입니다.</span><b id="progress-value">0%</b></div>
+        </div>
+        <div class="summary-strip" id="validation-summary"></div>
+      </div>
+      <div class="table-wrap preview-table" id="preview-wrap" hidden>
+        <table>
+          <thead><tr><th>파일명</th><th>위원회·의원</th><th>기한</th><th>번호</th><th>요구내용</th><th>세부항목·비고</th></tr></thead>
+          <tbody id="preview-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section" id="assign-section">
+      <div class="section-head">
+        <div><h2><span class="step-no">2</span>배분</h2><p>후보 1순위를 기본값으로 제시합니다. 최종 확정은 담당자가 합니다.</p></div>
+        <span class="badge" id="case-count">0개 문항</span>
+      </div>
+      <div id="allocation-loading" class="loading-skeleton" aria-label="배분 자료를 준비하는 중"></div>
+      <div class="table-wrap allocation-table" id="allocation-wrap" hidden>
+        <table>
+          <thead><tr><th>상태</th><th>의원·문항</th><th>요구내용</th><th>후보 3순위</th><th>주관 과</th><th>협조 과</th><th>확정</th></tr></thead>
+          <tbody id="allocation-body"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="allocation-empty" hidden>접수 등록한 문항이 없습니다. 위에서 PDF 또는 CSV를 먼저 불러오세요.</div>
+    </section>
+  </main>
+
+  <script src="./engine.js"></script>
+  <script src="./common.js"></script>
+  <script src="./split.js"></script>
+  <script type="module">
+    import * as pdfjsLib from './lib/pdf.mjs';
+    pdfjsLib.GlobalWorkerOptions.workerSrc = './lib/pdf.worker.mjs';
+
+    const pdfInput = document.querySelector('#pdf-input');
+    const csvInput = document.querySelector('#csv-input');
+    const registerButton = document.querySelector('#register-button');
+    const progress = document.querySelector('#progress');
+    const progressBar = document.querySelector('#progress-bar');
+    const progressValue = document.querySelector('#progress-value');
+    const progressLabel = document.querySelector('#progress-label');
+    const validationSummary = document.querySelector('#validation-summary');
+    const previewWrap = document.querySelector('#preview-wrap');
+    const previewBody = document.querySelector('#preview-body');
+    const allocationLoading = document.querySelector('#allocation-loading');
+    const allocationWrap = document.querySelector('#allocation-wrap');
+    const allocationEmpty = document.querySelector('#allocation-empty');
+    const allocationBody = document.querySelector('#allocation-body');
+    const caseCount = document.querySelector('#case-count');
+    let stagedRows = [];
+    let organizations = [];
+
+    function setProgress(done, total, label) {
+      const percent = total ? Math.round(done / total * 100) : 0;
+      progress.classList.add('show');
+      progressBar.style.width = `${percent}%`;
+      progressValue.textContent = `${percent}%`;
+      progressLabel.textContent = label;
+    }
+
+    async function extractLines(file, fileIndex, totalFiles) {
+      const data = new Uint8Array(await file.arrayBuffer());
+      const pdf = await pdfjsLib.getDocument({ data }).promise;
+      const lines = [];
+      for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+        setProgress(fileIndex - 1 + pageNumber / pdf.numPages, totalFiles, `${file.name} ${pageNumber}/${pdf.numPages}쪽 읽는 중`);
+        const page = await pdf.getPage(pageNumber);
+        const content = await page.getTextContent();
+        let line = '';
+        for (const item of content.items) {
+          if (!('str' in item)) continue;
+          line += item.str;
+          if (item.hasEOL) {
+            if (line.trim()) lines.push(line.trim());
+            line = '';
+          } else if (item.str && !item.str.endsWith(' ')) {
+            line += ' ';
+          }
+        }
+        if (line.trim()) lines.push(line.trim());
+      }
+      return lines;
+    }
+
+    function renderPreview(rows, validations = []) {
+      stagedRows = rows;
+      previewBody.innerHTML = rows.map(row => `
+        <tr><td>${AppCommon.escapeHtml(row.파일명)}</td><td><b>${AppCommon.escapeHtml(row.위원회)}</b><br><span class="minor">${AppCommon.escapeHtml(row.의원)}</span></td>
+        <td>${AppCommon.escapeHtml(row.제출기한)}</td><td>${AppCommon.escapeHtml(row.문항번호)}</td><td class="requirement">${AppCommon.escapeHtml(row.요구내용)}</td>
+        <td><span class="minor">${AppCommon.escapeHtml([row.세부항목, row.비고].filter(Boolean).join(' / ') || '-')}</span></td></tr>`).join('');
+      previewWrap.hidden = !rows.length;
+      registerButton.disabled = !rows.length;
+      validationSummary.innerHTML = validations.map(item => `<span class="summary-chip ${item.일치 ? '' : 'bad'}">${AppCommon.escapeHtml(item.파일명)} · ${item.추출문항수}문항 · ${item.일치 ? '번호 일치' : '확인필요'}</span>`).join('');
+    }
+
+    pdfInput.addEventListener('change', async () => {
+      const files = [...pdfInput.files];
+      if (!files.length) return;
+      try {
+        const allRows = [];
+        const validations = [];
+        for (let index = 0; index < files.length; index += 1) {
+          const file = files[index];
+          const lines = await extractLines(file, index + 1, files.length);
+          const rows = RequirementSplitter.parseLines(lines, file.name);
+          allRows.push(...rows);
+          validations.push(RequirementSplitter.validate(file.name, rows));
+        }
+        setProgress(files.length, files.length, `PDF ${files.length}건에서 ${allRows.length}개 문항을 읽었습니다.`);
+        renderPreview(allRows, validations);
+      } catch (error) {
+        AppCommon.showToast(error.message, 'error');
+        setProgress(0, 1, 'PDF를 읽지 못했습니다.');
+      }
+    });
+
+    csvInput.addEventListener('change', async () => {
+      const file = csvInput.files[0];
+      if (!file) return;
+      try {
+        const rows = RequirementSplitter.parseCsv(await file.text());
+        setProgress(1, 1, `${file.name}에서 ${rows.length}개 문항을 읽었습니다.`);
+        renderPreview(rows, []);
+      } catch (error) {
+        AppCommon.showToast(`CSV를 읽지 못했습니다: ${error.message}`, 'error');
+      }
+    });
+
+    registerButton.addEventListener('click', () => {
+      const result = AppCommon.registerCases(stagedRows);
+      AppCommon.showToast(`${result.added}개 문항을 접수했습니다${result.skipped ? ` · 중복 ${result.skipped}개 제외` : ''}.`);
+      renderAllocation();
+      document.querySelector('#assign-section').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    });
+
+    function optionMarkup(selected = '') {
+      return `<option value="">확인필요</option>${organizations.map(row => `<option value="${AppCommon.escapeHtml(row.과)}" ${row.과 === selected ? 'selected' : ''}>${AppCommon.escapeHtml(row.과)}</option>`).join('')}`;
+    }
+
+    function collaboratorMarkup(selected = []) {
+      return organizations.map(row => `<option value="${AppCommon.escapeHtml(row.과)}" ${selected.includes(row.과) ? 'selected' : ''}>${AppCommon.escapeHtml(row.과)}</option>`).join('');
+    }
+
+    function renderAllocation() {
+      const cases = AppCommon.getCases();
+      caseCount.textContent = `${cases.length}개 문항`;
+      allocationBody.innerHTML = cases.map(item => {
+        const candidates = item.후보?.length
+          ? item.후보.map((candidate, index) => `<div class="candidate"><b>${index + 1}. ${AppCommon.escapeHtml(candidate.과)}</b><small>${AppCommon.escapeHtml(candidate.근거키워드)} · 우선순위 ${candidate.우선순위 ?? candidate.점수}</small></div>`).join('')
+          : '<span class="minor">맞는 규칙 없음 · 확인필요</span>';
+        return `<tr data-id="${AppCommon.escapeHtml(item.id)}">
+          <td><span class="status ${item.상태 === '배분확정' ? 'confirmed' : ''}">${AppCommon.escapeHtml(item.상태)}</span></td>
+          <td><b>${AppCommon.escapeHtml(item.의원)}-${AppCommon.escapeHtml(item.문항번호)}</b><br><span class="minor">${AppCommon.escapeHtml(item.위원회)}</span></td>
+          <td class="requirement">${AppCommon.escapeHtml(item.요구내용)}${item.세부항목 ? `<br><span class="minor">${AppCommon.escapeHtml(item.세부항목)}</span>` : ''}</td>
+          <td><div class="candidate-list">${candidates}</div></td>
+          <td><label class="sr-only" for="lead-${AppCommon.escapeHtml(item.id)}">주관 과</label><select class="lead-select">${optionMarkup(item.주관과)}</select></td>
+          <td><label class="sr-only">협조 과</label><select class="support-select" multiple>${collaboratorMarkup(item.협조과 || [])}</select><span class="minor">Ctrl 키로 여러 개 선택</span></td>
+          <td><button class="btn teal confirm-button" type="button">${item.상태 === '배분확정' ? '다시 확정' : '배분 확정'}</button>${item.확정방법 ? `<br><span class="minor">${AppCommon.escapeHtml(item.확정방법)}</span>` : ''}</td>
+        </tr>`;
+      }).join('');
+      allocationLoading.hidden = true;
+      allocationWrap.hidden = cases.length === 0;
+      allocationEmpty.hidden = cases.length > 0;
+    }
+
+    allocationBody.addEventListener('click', event => {
+      const button = event.target.closest('.confirm-button');
+      if (!button) return;
+      const row = button.closest('tr');
+      const caseId = row.dataset.id;
+      const current = AppCommon.getCases().find(item => item.id === caseId);
+      const lead = row.querySelector('.lead-select').value;
+      const support = [...row.querySelector('.support-select').selectedOptions].map(option => option.value).filter(value => value !== lead);
+      if (!lead) {
+        AppCommon.showToast('주관 과를 선택해야 배분을 확정할 수 있습니다.', 'error');
+        row.querySelector('.lead-select').focus();
+        return;
+      }
+      const method = lead === current.후보?.[0]?.과 ? '규칙' : '수정';
+      AppCommon.updateCase(caseId, { 상태: '배분확정', 주관과: lead, 협조과: support, 확정방법: method, 확정일시: new Date().toISOString() }, '배분확정');
+      AppCommon.showToast(`${current.의원}-${current.문항번호} 문항을 ${lead}로 확정했습니다.`);
+      renderAllocation();
+    });
+
+    try {
+      organizations = await AppCommon.loadReferenceData();
+      renderAllocation();
+    } catch (error) {
+      allocationLoading.hidden = true;
+      allocationEmpty.hidden = false;
+      allocationEmpty.textContent = error.message;
+      AppCommon.showToast(error.message, 'error');
+    }
+  </script>
+</body>
+</html>

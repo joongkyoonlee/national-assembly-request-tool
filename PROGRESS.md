@@ -2,6 +2,7 @@
 
 | 날짜 | 단계 | 완료 | 남은 일 | 막힌 점 / 질문 |
 |---|---|---|---|---|
+| 11/8 | 외부 호스팅 정리 | 사용자 요청에 따라 Netlify split-sum 사이트와 Vercel national-assembly-request-tool 프로젝트·배포를 영구 삭제; 두 주소 404 및 프로젝트 목록 제거 확인 | 없음 | GitHub 저장소·GitHub Pages는 유지 |
 | 11/8 | Netlify 404 복구 | split-sum 사이트가 올바른 GitHub 저장소·main에 연결됐지만 Publish directory가 비어 저장소 루트를 배포한 원인 확인; netlify.toml에서 docs를 게시 폴더로 지정하고 Production 재배포 완료; https://split-sum.netlify.app 및 배분 화면·CSV·PDF.js HTTP 200 확인 | 없음 | 없음 |
 | 11/8 | Vercel 404 복구 | Vercel 프로젝트·배포 로그 점검 결과 저장소 루트에 index.html이 없어 404가 발생함을 확인; vercel.json에서 출력 폴더를 docs로 지정하고 Production 재배포 완료; https://national-assembly-request-tool.vercel.app 및 화면·CSV·PDF.js 자원 HTTP 200 확인 | 없음 | 없음 |
 | 11/8 | GitHub Pages 배포 | 공개 전 키·개인정보 패턴 검사 통과, .gitignore 작성, web/을 docs/로 복사·해시 대조, 공개 저장소 생성·main push·Pages /docs 배포 완료; 주소: https://joongkyoonlee.github.io/national-assembly-request-tool/ | 없음 | 없음 |

@@ -1,0 +1,5 @@
+{
+  "name": "national-assembly-request-tool",
+  "compatibility_date": "2026-11-01",
+  "assets": { "directory": "./web" }
+}

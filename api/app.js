@@ -9,13 +9,21 @@ function createBlobStore() {
       const { head } = require("@vercel/blob");
       try {
         const blob = await head("cases.json", { token: process.env.BLOB_READ_WRITE_TOKEN });
-        const response = await fetch(blob.downloadUrl, { cache: "no-store" });
+        const downloadUrl = new URL(blob.downloadUrl);
+        downloadUrl.searchParams.set("v", Date.now().toString());
+        const response = await fetch(downloadUrl, {
+          cache: "no-store",
+          headers: { "Cache-Control": "no-cache" }
+        });
         if (!response.ok) throw new Error(`cases.json 조회 실패: ${response.status}`);
         return await response.json();
       } catch (error) {
-        if (error && (error.name === "BlobNotFoundError" || error.status === 404 || error.statusCode === 404)) {
-          return EMPTY_DB();
-        }
+        if (error && (
+          error.name === "BlobNotFoundError" ||
+          error.constructor?.name === "BlobNotFoundError" ||
+          error.status === 404 || error.statusCode === 404 ||
+          /requested blob does not exist/i.test(error.message || "")
+        )) return EMPTY_DB();
         throw error;
       }
     },
@@ -26,6 +34,7 @@ function createBlobStore() {
         access: "public",
         addRandomSuffix: false,
         allowOverwrite: true,
+        cacheControlMaxAge: 60,
         contentType: "application/json; charset=utf-8",
         token: process.env.BLOB_READ_WRITE_TOKEN
       });

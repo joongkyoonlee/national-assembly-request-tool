@@ -2,7 +2,7 @@
 
 | 날짜 | 단계 | 완료 | 남은 일 | 막힌 점 / 질문 |
 |---|---|---|---|---|
-| 11/8 | Vercel 404 복구 | Vercel 프로젝트·배포 로그 점검 결과 저장소 루트에 index.html이 없어 404가 발생함을 확인; vercel.json에서 출력 폴더를 docs로 지정 | 재배포 후 기본 도메인 응답 확인 | 없음 |
+| 11/8 | Vercel 404 복구 | Vercel 프로젝트·배포 로그 점검 결과 저장소 루트에 index.html이 없어 404가 발생함을 확인; vercel.json에서 출력 폴더를 docs로 지정하고 Production 재배포 완료; https://national-assembly-request-tool.vercel.app 및 화면·CSV·PDF.js 자원 HTTP 200 확인 | 없음 | 없음 |
 | 11/8 | GitHub Pages 배포 | 공개 전 키·개인정보 패턴 검사 통과, .gitignore 작성, web/을 docs/로 복사·해시 대조, 공개 저장소 생성·main push·Pages /docs 배포 완료; 주소: https://joongkyoonlee.github.io/national-assembly-request-tool/ | 없음 | 없음 |
 | 11/8 | 배분 화면 S4 | web/index.html·assign.html·common.js·split.js와 로컬 PDF.js, 보강 배분기준표·조직도 CSV를 구성; PDF 3건 25·34·19=78문항 연속 번호 확인, 후보 있는 74건의 1순위 기본값 일치, 후보 없음 4건 확인필요, 2건 배분확정 및 시작 화면 집계 확인; 분류 시험 1순위 35/40·3순위 40/40 | S6 현업 회신, S8 취합 화면 | 8000 포트에 기존 서버가 떠 있어 개발 검증은 8001·8002 사용; 실제 실행 전 기존 8000 서버 종료 필요 |
 | 11/8 | 조직·키워드 조회 화면 | org.html에서 org.json의 실국·과·대표키워드 26개 과를 표로 표시하고, Fuse.js CDN으로 과·키워드 오타 검색과 빈 결과·로딩 오류 안내를 구현; 로컬 서버에서 26행 로딩·정확 검색·오타 검색 확인 | 없음 | CDN 사용으로 실행 시 인터넷 연결 필요 |
